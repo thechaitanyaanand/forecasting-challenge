@@ -1,4 +1,5 @@
 # Exact versions of the core runtime dependencies (Python 3.13, Windows) this project was developed and tested with.
+# Needs Python 3.12+ (numpy 2.5). On Python 3.11 use `pip install -e .` instead.
 # Optional: no torch/chronos/timesfm/jupyter/dev packages. Install, then: pip install -e .
 numpy==2.5.4
 pandas==2.3.3

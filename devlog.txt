@@ -37,3 +37,4 @@ D29 provision at the 95% upper bound. chosen from training folds only: in-sample
 D30 no new models after the holdout run. possible hourly pattern (lags 12, 24) left for future work.
 D31 report kept to 4-6 pages; latency and data checks moved to appendices.
 D32 short datasets fall back to persistence; too short for a holdout exits 2. csv output uses lf line endings.
+D33 tested on python 3.11 (pandas 3.1, numpy 2.4): 90 passed, 2 skipped, predictions.csv byte-identical. lock file needs 3.12+.

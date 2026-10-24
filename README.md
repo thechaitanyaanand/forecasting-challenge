@@ -49,8 +49,9 @@ python -m pip install -e ".[dev]"
 
 The core install has no PyTorch and needs no GPU.
 
-Optional exact pins: `python -m pip install -r requirements-lock.txt` installs the exact versions of the core
-runtime dependencies this project was developed and tested with (run it before the editable install).
+Optional exact pins (Python 3.12+ only, because numpy 2.5 needs 3.12): `python -m pip install -r requirements-lock.txt`
+installs the exact core versions this project was developed with (run it before the editable install). On 3.11,
+use the normal install above.
 
 ### 3. Get the dataset
 
