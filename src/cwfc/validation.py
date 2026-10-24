@@ -24,7 +24,11 @@ def rolling_origin_splits(
     """
     if horizon <= 0 or min_train_size <= 0:
         raise ValueError("horizon and min_train_size must be positive")
-    ts = pd.to_datetime(frame[timestamp_col], utc=True)
+    raw = frame[timestamp_col]
+    if pd.api.types.is_integer_dtype(raw):
+        ts = pd.to_datetime(raw, unit="s", utc=True)
+    else:
+        ts = pd.to_datetime(raw, utc=True)
     if not ts.is_monotonic_increasing:
         raise ValueError("timestamps must be sorted")
     n = len(frame)
@@ -37,4 +41,8 @@ def rolling_origin_splits(
         val_end = ts.iloc[train_end_idx + horizon - 1]
         out.append(TimeSplit(train_end, val_start, val_end))
         train_end_idx += step
+    if not out:
+        raise ValueError(
+            f"no splits: {n} rows is fewer than min_train_size + horizon = {min_train_size + horizon}"
+        )
     return out
