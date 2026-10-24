@@ -1,0 +1,39 @@
+devlog - cloud workload forecasting
+
+23 Oct
+D1  profiled data first: 134 steps x 10,000 vms, 5 min grid, no gaps or dups. cpu mean 9.39%, sd 0.195. bump at steps 53-72.
+D2  metadata avg/max/p95 cpu and deletion time cover the vm's whole life, so they leak the holdout. not used.
+D3  forecast is an input to a provisioning decision, so the end product is a headroom policy, not just a number. all inference runs locally.
+D4  plan: simple baselines + global lightgbm + zero-shot foundation models, all on the same folds. complex models have to beat the simple ones.
+D5  kept 5 min cadence. 15 min would leave about 37 points.
+D6  added core-weighted cpu and peak core demand for capacity work. ">24" core bucket taken as 32.
+D7  holdout = last 24 steps, untouched until one final run. model choice on 20 rolling origins (48..86) inside the first 110.
+D8  pick lowest fold mae, but a more complex model must beat simpler ones on a diebold-mariano test (p < 0.05).
+D9  models only get data up to the forecast origin, so they can't see the future even by mistake.
+D10 nothing hard-coded to 10000/134/110. seed 0.
+D11 reports/artifacts stays out of git; everything in it is rebuilt by the predict and benchmark commands.
+
+24 Oct
+D12 one cleaning rule: drop invalid readings, average duplicates, reject off-grid timestamps.
+D13 first dm test picked the complex model ~40% of the time on pure noise. switched to newey-west variance, now ~1.4%.
+D14 lightgbm features only use columns before the origin; checked alignment on a synthetic pattern.
+D15 chronos-2 and timesfm 2.5 were pretrained on azure/borg/alibaba cluster traces. reported, but not allowed to win. chronos-bolt has no documented cloud data.
+D16 fold mae looks high (0.24) but even a perfect constant gets 0.178. most folds start on the bump. added expanding mean as a baseline.
+D17 bottom-up foundation model was averaging per-vm medians; cpu is skewed so that underpredicts. switched to means.
+D18 active_vm_count is 10,000 at every step because only complete traces were kept. persistence is exact.
+D19 bottom-up mean taken from the 0.1-0.9 quantile grid. mae went 0.451 -> 0.190.
+D20 persistence selected for cpu. best eligible model (bottom-up chronos-bolt, 0.190) not significantly better.
+D21 timesfm 2.5 adapter built and benchmarked only.
+D22 cli leaves lightgbm and foundation models off by default (slow, not better, need extra installs).
+D23 80/95% conformal intervals from fold errors; trade-off priced at 10:1 under vs over provisioning.
+D24 a timestamp with no readings is missing for every target, not zero vms.
+D25 cli exits 2 with one line only for bad data, missing extras or a broken output. other errors raise.
+D26 holdout run once after selection was frozen: mae 0.147 pp, coverage 0.75 (80%) and 0.958 (95%).
+D27 separate benchmark command rebuilds the full model comparison; notebook only reads its outputs.
+D28 correction: acf is not short memory. 12 of 24 lags significant, 6 once the bump is removed.
+
+25 Oct
+D29 provision at the 95% upper bound. chosen from training folds only: in-sample rates are optimistic, 90->95 costs ~6% more, calibration flips across the bump. holdout used only as a check.
+D30 no new models after the holdout run. possible hourly pattern (lags 12, 24) left for future work.
+D31 report kept to 4-6 pages; latency and data checks moved to appendices.
+D32 short datasets fall back to persistence; too short for a holdout exits 2. csv output uses lf line endings.
