@@ -1,73 +1,79 @@
-# Cloud Workload Forecasting Challenge
+# Cloud Workload Forecasting
 
-AI/ML take-home challenge built from the **Microsoft Azure Public Dataset V2** VM trace.
+A leakage-safe pipeline that forecasts the next two hours (24 five-minute steps) of fleet demand for the
+`data-v1` release of the Microsoft Azure Public Dataset V2 VM trace, with conformal intervals and a capacity
+policy. Everything runs locally; no external forecasting API is called.
 
-## Start here
+**Headline result.** `active_vm_count` is constant (10,000) by construction of the dataset, so persistence is
+exact. For `aggregate_cpu_utilization`, no eligible model beat persistence with statistical significance on
+20 rolling training folds, so persistence was selected. On the untouched holdout it scored MAE 0.147 pp
+(about 1.6 % of the level), with interval coverage 0.75 at 80 % and 0.958 at 95 %. The useful output is the
+headroom policy, not the point forecast. Full write-up: [`reports/final_report.md`](reports/final_report.md).
 
-1. Read [`ASSIGNMENT.md`](ASSIGNMENT.md).
-2. Read [`DATASET.md`](DATASET.md).
-3. Download the **`data-v1` GitHub Release** dataset and extract it as `challenge_data/`.
-4. Read [`SUBMISSION.md`](SUBMISSION.md).
-5. Implement your analysis and forecasting pipeline.
+Developed with AI coding assistance (Claude); all design decisions, results and code were reviewed and are
+logged in [`devlog.txt`](devlog.txt).
 
-The challenge dataset is distributed as a versioned GitHub Release rather than committed to the repository. The `data-v1` release contains the fixed curated dataset used for this assignment.
+## Quickstart
 
-## Environment setup
+Python **3.11 or newer** is required (developed on 3.13).
 
-Python **3.11 or newer** is required.
+### 1. Create a virtual environment
 
-Create a virtual environment:
-
-### Linux / macOS
+Linux / macOS:
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 ```
 
-### Windows PowerShell
+Windows PowerShell:
 
 ```powershell
 py -m venv .venv
 .venv\Scripts\Activate.ps1
 ```
 
-### Windows Command Prompt
+Windows Command Prompt:
 
 ```cmd
 py -m venv .venv
 .venv\Scripts\activate.bat
 ```
 
-Install the project and development dependencies:
+### 2. Install
 
 ```bash
 python -m pip install --upgrade pip
 python -m pip install -e ".[dev]"
 ```
 
-Verify the installation:
+The core install has no PyTorch and needs no GPU.
 
-```bash
-python -m pytest -q
-```
+Optional exact pins: `python -m pip install -r requirements-lock.txt` installs the exact versions of the core
+runtime dependencies this project was developed and tested with (run it before the editable install).
 
-The repository includes a small test suite covering the starter forecasting utilities. Run it before beginning the assignment.
+### 3. Get the dataset
 
-## Dataset download
-
-The hiring dataset is distributed as the fixed `data-v1` release of this repository.
-
+The dataset is the fixed `data-v1` release of this repository.
 **Download:** [Azure Dataset v1 Release](https://github.com/atomityhq/forecasting-challenge/releases/tag/data-v1)
 
-Download `data-v1.tar.gz` from the release and extract it into the repository as `challenge_data/`:
+Download `data-v1.tar.gz` and extract it into the repository as `challenge_data/`.
+
+Linux / macOS / Git Bash:
 
 ```bash
 mkdir -p challenge_data
 tar -xzf data-v1.tar.gz -C challenge_data
 ```
 
-The resulting layout is:
+Windows PowerShell (Windows 10+ ships `tar`):
+
+```powershell
+New-Item -ItemType Directory -Force challenge_data | Out-Null
+tar -xzf data-v1.tar.gz -C challenge_data
+```
+
+Layout:
 
 ```text
 challenge_data/
@@ -77,14 +83,21 @@ challenge_data/
 └── SHA256SUMS
 ```
 
-Verify the dataset before starting the assignment:
+Verify the checksums (Linux / macOS / Git Bash):
 
 ```bash
 cd challenge_data
 sha256sum -c SHA256SUMS
+cd ..
 ```
 
-You should see:
+Windows PowerShell:
+
+```powershell
+Get-Content challenge_data\SHA256SUMS | ForEach-Object { $h, $f = $_ -split '\s+\*?', 2; if ((Get-FileHash -Algorithm SHA256 "challenge_data\$f").Hash -eq $h) { "${f}: OK" } else { "${f}: FAILED" } }
+```
+
+Expected:
 
 ```text
 vm_cpu_readings.csv.gz: OK
@@ -92,38 +105,156 @@ vm_metadata.csv.gz: OK
 DATA_CARD.md: OK
 ```
 
-The release is a real, curated subset of the Microsoft Azure Public Dataset V2. It is not synthetic data.
+The release is a real, curated subset of the Microsoft Azure Public Dataset V2 (10,000 VMs × 134 five-minute
+CPU readings). Source: https://github.com/Azure/AzurePublicDataset. See [`DATASET.md`](DATASET.md).
 
-The dataset contains 10,000 VMs with 134 CPU measurements per VM at five-minute intervals, for a total of 1,340,000 CPU observations.
-
-Use the exact `data-v1` release provided for this assignment. Do not substitute another dataset or a different version of the Azure Public Dataset.
-
-## What you are solving
-
-The underlying data contains anonymized VM workload telemetry sampled every five minutes. Your job is to understand the workload and build a defensible forecasting pipeline for near-term aggregate demand.
-
-The challenge is intentionally open-ended. We evaluate reasoning, time-series methodology, leakage prevention, error analysis, reproducibility, and the quality of your operational conclusions—not just model complexity.
-
-## Expected environment
-
-Python 3.11+ is recommended.
+### 4. Produce the predictions (the one command)
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -e '.[dev]'
-pytest -q
+python -m cwfc.predict --data challenge_data --output predictions.csv
 ```
 
-Model dependencies are intentionally not prescribed. Add only what you need and document them.
+Runtime: under a minute on a laptop CPU (42 s in a clean-checkout test). It prints the data report and the selected model per target, then
+writes:
+
+- `predictions.csv`: 24 rows, columns `timestamp,active_vm_count,aggregate_cpu_utilization`, checked against
+  the submission contract before it is written;
+- `reports/artifacts/`: `selection.json`, `backtest_*.csv`, `intervals.csv`, `tradeoff.csv`,
+  `capacity_plan.csv` (use `--artifacts DIR` to write elsewhere).
+
+Reference output: `predictions.csv` has SHA-256 `61da69b0c793a1d37376aead2ba85b61f60656b44f226bd76d828c01ae1f2aef`.
+Output is written with LF line endings, so the hash holds on any platform. `evaluate` reads the holdout and must
+only be run after `predict`, once.
+
+Minimum history: 37 timesteps are needed to carve out the 24-step holdout (fewer raises a one-line error, exit
+code 2). With 37 to 59 timesteps the pipeline falls back to persistence and skips intervals and the capacity
+plan; 60 or more (24 + 12 training steps for backtesting, i.e. horizon + 12 training steps) give the full pipeline.
+
+`reports/artifacts/` is gitignored: every artifact the report and notebook quote is regenerated by the
+commands in this README (`predict`, then the optional `benchmark`, then `evaluate`).
+
+The last 24 timestamps of whatever data is supplied are the holdout; their values are never used for fitting
+or selection. Nothing is hard-coded to the size of `data-v1`. The output is deterministic (seed 0).
+
+Optional flags: `--include-lightgbm` adds the LightGBM panel model to the candidates (adds several minutes),
+`--with-fm` adds the eligible foundation models (needs the `[fm]` extra).
+
+## Optional extras
+
+Foundation models (Chronos-Bolt, Chronos-2) need PyTorch. For a CUDA 12 GPU, install the CUDA wheel first:
+
+```bash
+python -m pip install torch --index-url https://download.pytorch.org/whl/cu126
+python -m pip install -e ".[fm]"
+```
+
+Without a GPU, `python -m pip install -e ".[fm]"` alone installs a CPU build (inference is
+12–27× slower than on the GPU, depending on the model; see the report). TimesFM 2.5 is a separate extra:
+`python -m pip install -e ".[timesfm]"`. Model weights are downloaded once from Hugging Face and then run
+locally.
+
+## Full benchmark
+
+Rebuilds the whole model comparison on the training window only (all baselines, LightGBM, Chronos-Bolt,
+Chronos-2, TimesFM, latency, pairwise Diebold–Mariano p-values):
+
+```bash
+python -m cwfc.benchmark --data challenge_data --artifacts reports/artifacts --with-fm
+```
+
+Writes `benchmark_summary.csv`, `benchmark_cpu.csv`, `benchmark_count*.csv`, `dm_matrix.csv`, `latency.csv`.
+Needs `[fm]` and `[timesfm]` (a GPU is strongly recommended); LightGBM alone takes about 8 minutes. This step
+is optional: a CPU-only reviewer can read its results in the executed notebook and in Appendix B of the
+final report.
+
+## Holdout evaluation
+
+```bash
+python -m cwfc.evaluate --data challenge_data
+```
+
+Scores `predictions.csv` and `reports/artifacts/intervals.csv` against the holdout and writes
+`holdout_eval.json`. This is a one-shot step: it was run once, after model selection was frozen, and its
+result was never fed back into any choice. Rerunning it reproduces the same numbers.
+
+## Tests
+
+```bash
+python -m pytest -q
+```
+
+Tests run on small synthetic data, not on the release. The foundation-model test is skipped when the `[fm]`
+extra is not installed.
+
+## Notebook
+
+[`notebooks/analysis.ipynb`](notebooks/analysis.ipynb) is the analysis narrative (data contract, regime,
+autocorrelation, segments, model comparison, error analysis, intervals, capacity policy, holdout). It only
+reads artifacts, so run `predict`, `benchmark` and `evaluate` first, then:
+
+```bash
+python -m jupyter nbconvert --to notebook --execute --inplace notebooks/analysis.ipynb
+```
+
+It executes in under a minute on the core install (no `[fm]` needed once the artifacts exist) and rewrites
+the figures in `reports/figures/`.
+
+## Repository layout
+
+```text
+src/cwfc/
+  data.py        loading, cleaning, data-contract checks, VM panel
+  targets.py     target series and holdout split
+  features.py    leakage-safe lag features for the LightGBM panel model
+  models.py      baselines (persistence, means, drift, ETS, ARIMA) and LightGBM panel
+  fm.py          Chronos / TimesFM adapters and the contamination registry
+  backtest.py    rolling-origin backtest and selection rule
+  baselines.py   starter baseline utilities from the original repository (not used by the pipeline)
+  metrics.py     MAE, RMSE, MASE, coverage, Diebold–Mariano test
+  validation.py  starter utility (rolling-origin split helpers), superseded by backtest.py
+  policy.py      conformal intervals and capacity trade-off
+  predict.py     the submission command
+  benchmark.py   full model comparison
+  evaluate.py    one-shot holdout scoring
+tests/           unit and end-to-end tests
+notebooks/       analysis.ipynb
+reports/         final_report.md, fm_contamination.md, figures/ (artifacts/ is generated, not committed)
+devlog.txt       short decision log
+```
+
+## Main modelling decisions
+
+- **Simple baselines first, complexity must earn its place.** Selection takes the lowest mean fold MAE, but
+  a more complex model is chosen only if it beats every simpler one with a Diebold–Mariano test at p < 0.05.
+- **Rolling-origin validation inside the training window:** 20 origins, 24-step horizon; the final 24 steps
+  are scored once, after selection is frozen.
+- **No leaky features.** Lifetime summaries in the metadata (`avg_cpu`, `max_cpu`, `p95_max_cpu`, deletion
+  time) are never used; models only ever see data before the forecast origin.
+- **Contaminated foundation models are reported but not eligible.** Chronos-2 and TimesFM 2.5 were pretrained
+  on Azure, Borg and Alibaba cluster traces ([`reports/fm_contamination.md`](reports/fm_contamination.md)).
+- **Uncertainty from split-conformal intervals** on the selected model's fold residuals, not from model
+  assumptions.
+- **Capacity is planned in cores** (core-weighted CPU) per VM category, with under-provisioning priced at 10×
+  over-provisioning.
+- **The default command stays fast and CPU-only;** LightGBM and foundation models are opt-in flags.
+
+## Dependencies
+
+Core: `numpy`, `pandas`, `scipy`, `lightgbm`, `statsforecast`, `matplotlib`.
+`[dev]`: `pytest`, `nbformat`, `nbconvert`, `ipykernel`.
+`[fm]`: `torch`, `chronos-forecasting`.
+`[timesfm]`: `timesfm`.
+Exact lower bounds are in [`pyproject.toml`](pyproject.toml).
+
+## Further reading
+
+- [`reports/final_report.md`](reports/final_report.md): the final report.
+- [`devlog.txt`](devlog.txt): one-line log of decisions and findings.
+- [`reports/fm_contamination.md`](reports/fm_contamination.md): foundation-model pretraining check.
+- [`ASSIGNMENT.md`](ASSIGNMENT.md), [`DATASET.md`](DATASET.md), [`SUBMISSION.md`](SUBMISSION.md): the brief.
 
 ## Source
 
-Microsoft Azure Public Dataset V2:
-https://github.com/Azure/AzurePublicDataset
-
-The official V2 documentation describes a 30-day VM trace with five-minute CPU readings, VM metadata, and encrypted subscription/deployment/VM identifiers. The full upstream trace is much larger than this challenge release.
-
-## Submission
-
-Submit your work as a repository or archive according to [`SUBMISSION.md`](SUBMISSION.md).
+Microsoft Azure Public Dataset V2: https://github.com/Azure/AzurePublicDataset. The official V2
+documentation describes a 30-day VM trace with five-minute CPU readings, VM metadata and encrypted
+identifiers; this challenge release is a much smaller curated subset.
