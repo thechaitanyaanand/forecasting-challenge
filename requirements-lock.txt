@@ -1,0 +1,37 @@
+# Exact versions of the core runtime dependencies (Python 3.13, Windows) this project was developed and tested with.
+# Optional: no torch/chronos/timesfm/jupyter/dev packages. Install, then: pip install -e .
+numpy==2.5.4
+pandas==2.3.3
+scipy==1.18.1
+lightgbm==4.7.0
+statsforecast==2.1.1
+matplotlib==3.11.2
+statsmodels==0.15.0
+coreforecast==0.0.19
+utilsforecast==0.2.17
+fugue==0.9.7
+triad==1.0.2
+adagio==0.2.6
+cloudpickle==3.1.2
+formulaic==1.2.2
+patsy==1.0.3
+contourpy==1.4.0
+cycler==0.12.1
+fonttools==4.67.0
+kiwisolver==1.5.1
+packaging==26.3
+pillow==13.0.0
+pyparsing==3.3.3
+python-dateutil==3.0.0
+pytz==2026.5
+tzdata==2026.5
+six==1.17.0
+threadpoolctl==3.7.0
+narwhals==2.27.1
+pyarrow==26.0.0
+fsspec==2026.7.0
+tqdm==4.70.1
+psutil==7.2.2
+wrapt==2.5.2rc1
+typing_extensions==4.16.0
+interface_meta==2.0.1

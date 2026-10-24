@@ -5,12 +5,17 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "cloud-workload-forecasting"
 version = "1.0.0"
-description = "Candidate starter utilities for a cloud workload forecasting take-home"
+description = "Leakage-safe forecasting pipeline for the cloud workload forecasting challenge (Azure Public Dataset V2 subset)"
 requires-python = ">=3.11"
-dependencies = ["numpy>=1.26", "pandas>=2.0"]
+dependencies = ["numpy>=1.26", "pandas>=2.0", "scipy>=1.11", "lightgbm>=4.3", "statsforecast>=2.0", "matplotlib>=3.8"]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0"]
+dev = ["pytest>=8.0", "nbformat>=5.9", "nbconvert>=7.0", "ipykernel>=6.0"]
+fm = ["torch>=2.3", "chronos-forecasting>=2.0"]
+timesfm = ["timesfm>=2.0"]
+
+[project.scripts]
+cwfc-predict = "cwfc.predict:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
